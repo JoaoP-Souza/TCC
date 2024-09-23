@@ -3,9 +3,10 @@ import numpy as np
 from matplotlib import pyplot as plt
 from sklearn.preprocessing import MinMaxScaler
 from keras.models import Sequential
-from keras.layers import LSTM, Dense
+from keras.layers import LSTM, Dense, Dropout
 from sklearn.metrics import mean_squared_error
 import math
+from keras_tuner import RandomSearch
 
 # Load the dataset
 df = pd.read_csv('dataset_limpo.csv')
@@ -15,7 +16,6 @@ scaler = MinMaxScaler()
 df[['Local_X', 'Local_Y']] = scaler.fit_transform(df[['Local_X', 'Local_Y']])
 
 # Prepare the data
-# Assuming you want to predict the next position based on the last 10 positions
 def create_sequences(data, n_steps):
     X, y = [], []
     for i in range(len(data) - n_steps):
@@ -44,17 +44,41 @@ train_size = int(X.shape[0] * 0.8)
 X_train, X_test = X[:train_size], X[train_size:]
 y_train, y_test = y[:train_size], y[train_size:]
 
-# Build the LSTM model
-model = Sequential()
-model.add(LSTM(50, activation='relu', input_shape=(n_steps, 2)))
-model.add(Dense(2))  # 2 output units for Local_X and Local_Y
-model.compile(optimizer='adam', loss='mse')
+# Define a function to build the model for hyperparameter tuning
+def build_model(hp):
+    model = Sequential()
+    # Tuning the number of LSTM units
+    model.add(LSTM(units=hp.Int('units', min_value=32, max_value=512, step=32), 
+                   activation='relu', input_shape=(n_steps, 2)))
+    # Adding dropout layer
+    model.add(Dropout(rate=hp.Float('dropout', min_value=0.1, max_value=0.5, step=0.1)))
+    model.add(Dense(2))  # 2 output units for Local_X and Local_Y
+    # Compile the model
+    model.compile(optimizer='adam', loss='mse')
+    return model
 
-# Train the model
-history = model.fit(X_train, y_train, epochs=10, verbose=1, validation_data=(X_test, y_test))
+# Use Keras Tuner to find the best hyperparameters
+tuner = RandomSearch(
+    build_model,
+    objective='val_loss',
+    max_trials=2,  # Número de modelos a serem testados
+    executions_per_trial=1,  # Número de execuções para cada conjunto de hiperparâmetros
+    directory='C:/Users/jkspa/Desktop/arquivosTCC/TCC/tuner_results',  # Usando 'Desktop' em vez de 'Área de Trabalho'
+    project_name='lstm_vehicle_prediction'
+)
+
+
+# Run hyperparameter search
+tuner.search(X_train, y_train, epochs=5, validation_data=(X_test, y_test))
+
+# Get the best model
+best_model = tuner.get_best_models(num_models=1)[0]
+
+# Train the best model again for more epochs
+history = best_model.fit(X_train, y_train, epochs=10, validation_data=(X_test, y_test), verbose=1)
 
 # Making predictions on the test set
-predicted = model.predict(X_test)
+predicted = best_model.predict(X_test)
 
 # Inverse scaling to original values
 predicted = scaler.inverse_transform(predicted)
