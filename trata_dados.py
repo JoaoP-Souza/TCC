@@ -1,29 +1,44 @@
 import pandas as pd
+import numpy as np
 
-# Lista de arquivos txt
-arquivos_txt = ["Pos_X.txt", "Pos_Y.txt", "Best_x.txt", "Best_y.txt"]
+def process_file(filename, prefix):
+    # Ler o arquivo TXT
+    df = pd.read_csv(filename, sep=',', header=None)
 
-# Ler cada arquivo e armazenar em uma lista de DataFrames
-dfs = [pd.read_table(arquivo) for arquivo in arquivos_txt]
+    # Certificar-se de que há exatamente 1000 valores
+    total_values = df.shape[0] * df.shape[1]
+    if total_values != 1000:
+        print(f"Erro: O arquivo {filename} tem {total_values} valores, mas são necessários 1000.")
+        return None
 
-# Verificar se cada DataFrame tem uma única coluna
-for i, df in enumerate(dfs):
-    if df.shape[1] != 1:
-        raise ValueError(f"O arquivo {arquivos_txt[i]} deve ter apenas uma coluna.")
+    # Transformar os dados em uma matriz de 10 colunas, com 100 valores em cada coluna
+    data = df.values.flatten()
+    reshaped_data = data.reshape(100, 10)
 
-# Concatenar os DataFrames lado a lado (colunas)
-df_combined = pd.concat(dfs, axis=1)
+    # Criar um novo DataFrame com essas 10 colunas
+    new_df = pd.DataFrame(reshaped_data, columns=[f'{prefix}{i+1}' for i in range(10)])
 
-# Renomear as colunas (opcional, mas recomendado)
-df_combined.columns = ['Pos_X', 'Pos_Y', 'Best_x', 'Best_y']
+    return new_df
 
-# Visualizar o DataFrame resultante
-print(df_combined)
+# Processar Pos_X e Pos_Y
+pos_x_df = process_file('Pos_X.txt', 'Pos_X')
+pos_y_df = process_file('Pos_Y.txt', 'Pos_Y')
 
-# Salvar o DataFrame em um arquivo CSV
-df_combined.to_csv('df_final.csv', index=False)
+# Processar Best_X e Best_Y como colunas únicas, removendo espaços ou vírgulas extras
+best_x = pd.read_csv('Best_X.txt', delimiter='\t', header=None, names=['Best_X'])
+best_y = pd.read_csv('Best_Y.txt', delimiter='\t', header=None, names=['Best_Y'])
 
-# # Parte apenas para teste e verificacao do csv gerado
-# df_loaded = pd.read_csv('df_final.csv')
-# print(df_loaded['Best_y'])
+# Remove any commas or spaces that might be in the values
+best_x['Best_X'] = best_x['Best_X'].str.replace(',', '').astype(float)
+best_y['Best_Y'] = best_y['Best_Y'].str.replace(',', '').astype(float)
 
+# Certificar que não há valores nulos antes de mesclar
+if pos_x_df is not None and pos_y_df is not None:
+    # Concatenar todos os DataFrames com base no eixo das colunas (axis=1)
+    combined_df = pd.concat([best_x, best_y, pos_x_df, pos_y_df], axis=1)
+
+    # Salvar o DataFrame combinado em um arquivo CSV final
+    combined_df.to_csv('df_final.csv', index=False)
+    print("Arquivo 'df_final.csv' salvo com sucesso!")
+else:
+    print("Erro: Um ou mais arquivos não foram processados corretamente.")
