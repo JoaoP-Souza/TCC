@@ -5,15 +5,18 @@ from sklearn.preprocessing import MinMaxScaler
 from keras.models import Sequential
 from keras.layers import LSTM, Dense, Dropout
 from sklearn.metrics import mean_squared_error
-import math
 from keras_tuner import RandomSearch
 
 # Load the dataset
-df = pd.read_csv('dataset_limpo.csv')
+df = pd.read_csv('df_final.csv')
 
 # Normalize the data
 scaler = MinMaxScaler()
-df[['Local_X', 'Local_Y']] = scaler.fit_transform(df[['Local_X', 'Local_Y']])
+vet_cols = ['Best_X', 'Best_Y', 'Pos_X1', 'Pos_X2', 'Pos_X3', 'Pos_X4', 
+            'Pos_X5', 'Pos_X6', 'Pos_X7', 'Pos_X8', 'Pos_X9', 'Pos_X10',
+            'Pos_Y1', 'Pos_Y2', 'Pos_Y3', 'Pos_Y4', 'Pos_Y5', 'Pos_Y6', 
+            'Pos_Y7', 'Pos_Y8', 'Pos_Y9', 'Pos_Y10']
+df[vet_cols] = scaler.fit_transform(df[vet_cols]) 
 
 # Prepare the data
 def create_sequences(data, n_steps):
@@ -23,18 +26,10 @@ def create_sequences(data, n_steps):
         y.append(data[i + n_steps])
     return np.array(X), np.array(y)
 
-# Group by Vehicle_ID and create sequences
-n_steps = 10
-sequences = []
-
-for vehicle_id in df['Vehicle_ID'].unique():
-    vehicle_data = df[df['Vehicle_ID'] == vehicle_id][['Local_X', 'Local_Y']].values
-    X, y = create_sequences(vehicle_data, n_steps)
-    sequences.append((X, y))
-
-# Concatenate all sequences
-X = np.concatenate([seq[0] for seq in sequences], axis=0)
-y = np.concatenate([seq[1] for seq in sequences], axis=0)
+# Create sequences directly from the DataFrame
+n_steps = 100
+data_values = df[vet_cols].values  # Assuming these are the relevant columns
+X, y = create_sequences(data_values, n_steps)
 
 # Reshape X for LSTM input (samples, timesteps, features)
 X = X.reshape(X.shape[0], X.shape[1], 2)
@@ -52,7 +47,7 @@ def build_model(hp):
                    activation='relu', input_shape=(n_steps, 2)))
     # Adding dropout layer
     model.add(Dropout(rate=hp.Float('dropout', min_value=0.1, max_value=0.5, step=0.1)))
-    model.add(Dense(2))  # 2 output units for Local_X and Local_Y
+    model.add(Dense(2))
     # Compile the model
     model.compile(optimizer='adam', loss='mse')
     return model
@@ -61,12 +56,11 @@ def build_model(hp):
 tuner = RandomSearch(
     build_model,
     objective='val_loss',
-    max_trials=2,  # Número de modelos a serem testados
-    executions_per_trial=1,  # Número de execuções para cada conjunto de hiperparâmetros
-    directory='C:/Users/jkspa/Desktop/arquivosTCC/TCC/tuner_results',  # Usando 'Desktop' em vez de 'Área de Trabalho'
+    max_trials=2,  # Number of models to test
+    executions_per_trial=1,  # Number of executions for each hyperparameter set
+    directory='C:/Users/jkspa/Desktop/arquivosTCC/TCC/tuner_results',
     project_name='lstm_vehicle_prediction'
 )
-
 
 # Run hyperparameter search
 tuner.search(X_train, y_train, epochs=5, validation_data=(X_test, y_test))
