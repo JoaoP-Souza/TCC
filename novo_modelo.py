@@ -1,8 +1,8 @@
-import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import tensorflow as tf
 import random
+import pandas as pd
 from keras.models import Sequential
 from keras.layers import LSTM, Dense, Dropout, Input
 from sklearn.preprocessing import MinMaxScaler
@@ -17,7 +17,7 @@ tf.random.set_seed(SEED)
 random.seed(SEED)
 
 # Carregar o CSV
-data = pd.read_csv('df_final.csv')
+data = pd.read_csv('df_final_K10.csv')
 
 # Extrair os recursos (features) e os alvos (targets)
 X = data.drop(['Best_X', 'Best_Y'], axis=1).values
@@ -33,7 +33,7 @@ y_scaled = scaler_y.fit_transform(y)
 # Printe o número de características
 print(f"Número de características (features): {X_scaled.shape[1]}")
 
-# Definir o número de instantes de tempo (timesteps)
+# Definir o número de instantes de tempo (K)
 timesteps = 10
 
 # Ajustar o formato dos dados para (amostras, timesteps, características)
@@ -64,7 +64,7 @@ tuner = RandomSearch(
     build_model,
     objective='val_loss',
     max_trials=10,
-    executions_per_trial=1,
+    executions_per_trial=3,
     directory='C:/Users/jkspa/Desktop/arquivosTCC/TCC/tuner_results',
     project_name='lstm_vehicle_prediction'
 )
@@ -87,10 +87,68 @@ loss = model.evaluate(X_test, y_test)
 print(f'Test loss: {loss}')
 
 # Plotar a perda de treino e validação ao longo das épocas
-plt.plot(history.history['loss'], label='Training Loss')
-plt.plot(history.history['val_loss'], label='Validation Loss')
-plt.xlabel('Epochs')
-plt.ylabel('Loss')
-plt.title('Training and Validation Loss Over Epochs')
+plt.plot(history.history['loss'], label='Perda no treinamento')
+plt.plot(history.history['val_loss'], label='Perda na validação')
+plt.xlabel('Épocas')
+plt.ylabel('Perda')
+plt.title('Perda no Treinamento e na Validação durante as épocas')
+plt.legend()
+plt.show()
+
+
+
+# Parâmetros dos quadrantes
+esc = 1000
+quad_ranges = {
+    'quad1': {'x': (0, 1*esc), 'y': (0, esc)},
+    'quad2': {'x': ((1*esc)+1, 2*esc), 'y': (0, esc)},
+    'quad3': {'x': ((2*esc)+1, 3*esc), 'y': (0, esc)},
+}
+
+# Função para distribuir K dispositivos uniformemente em cada quadrante
+def distribui_disp(K, quad):
+    x_min, x_max = quad_ranges[quad]['x']
+    y_min, y_max = quad_ranges[quad]['y']
+    x_coords = np.random.uniform(x_min, x_max, K)
+    y_coords = np.random.uniform(y_min, y_max, K)
+    return x_coords, y_coords
+
+# Função para prever e ajustar a posição dos PBs em cada quadrante usando o modelo treinado
+def prediz_PB(x_coords, y_coords, modelo, quad, esc):
+    # Combina as coordenadas dos dispositivos em uma matriz de entrada no formato adequado
+    X = np.column_stack((x_coords, y_coords)).reshape(1, 10, 2)  # 10 dispositivos com 2 coordenadas
+    X_expanded = np.tile(X, (1, 1, 10))  # Ajustar dimensão para (1, 10, 20) se for o esperado
+
+    # Faz a previsão usando o modelo treinado
+    previsao = modelo.predict(X_expanded)
+    pb_x, pb_y = previsao[0, 0], previsao[0, 1]
+    
+    # Ajustar as coordenadas para o intervalo do quadrante
+    x_min, x_max = quad_ranges[quad]['x']
+    y_min, y_max = quad_ranges[quad]['y']
+    pb_x = (x_min + pb_x * (x_max - x_min) / 20)  # Ajuste para o intervalo X do quadrante
+    pb_y = (y_min + pb_y * (y_max - y_min) / 20)  # Ajuste para o intervalo Y do quadrante
+
+    return pb_x, pb_y
+
+
+# Número de dispositivos K = 10 para cada quadrante
+K = 10
+
+plt.figure(figsize=(10, 10))
+
+# Processar cada quadrante e prever PBs
+for quad in quad_ranges.keys():
+    # Distribuir K dispositivos aleatoriamente
+    x_coords, y_coords = distribui_disp(K, quad)
+    pb_x, pb_y = prediz_PB(x_coords, y_coords, model, quad, esc)
+    plt.scatter(x_coords, y_coords, label=f'Dispositivos - {quad}', alpha=0.6)
+    
+    # Prever e ajustar posição do PB para este conjunto de dispositivos
+    plt.scatter(pb_x, pb_y, c='red', label=f'PB - {quad}', marker='X', s=100)
+
+plt.xlabel('Posição X')
+plt.ylabel('Posição Y')
+plt.title('Distribuição Uniforme de Dispositivos e Predição de PBs por Quadrante')
 plt.legend()
 plt.show()
