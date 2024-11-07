@@ -30,7 +30,7 @@ scaler_y = MinMaxScaler()
 X_scaled = scaler_X.fit_transform(X)
 y_scaled = scaler_y.fit_transform(y)
 
-# Printe o número de características
+# Printar o número de características no terminal
 print(f"Número de características (features): {X_scaled.shape[1]}")
 
 # Definir o número de instantes de tempo (K)
@@ -95,7 +95,12 @@ plt.title('Perda no Treinamento e na Validação durante as épocas')
 plt.legend()
 plt.show()
 
+y_pred = model.predict(X_test)
+print(f"Previsões: {y_pred[:5]}")  # Verifique as primeiras 5 previsões
+print(f"Valores reais: {y_test[:5]}")  # Compare com os valores reais
 
+error_percent = np.mean(np.abs((y_pred - y_test) / y_test)) * 100 
+print(f"Erro percentual médio: {error_percent:.2f}%") #printa o erro percentual no terminal
 
 # Parâmetros dos quadrantes
 esc = 1000
@@ -122,33 +127,58 @@ def prediz_PB(x_coords, y_coords, modelo, quad, esc):
     # Faz a previsão usando o modelo treinado
     previsao = modelo.predict(X_expanded)
     pb_x, pb_y = previsao[0, 0], previsao[0, 1]
-    
-    # Ajustar as coordenadas para o intervalo do quadrante
-    x_min, x_max = quad_ranges[quad]['x']
-    y_min, y_max = quad_ranges[quad]['y']
-    pb_x = (x_min + pb_x * (x_max - x_min) / 20)  # Ajuste para o intervalo X do quadrante
-    pb_y = (y_min + pb_y * (y_max - y_min) / 20)  # Ajuste para o intervalo Y do quadrante
 
     return pb_x, pb_y
 
-
-# Número de dispositivos K = 10 para cada quadrante
+# Número de dispositivos para cada quadrante
 K = 10
+
+# Definir as cores para cada quadrante
+cores_dispositivos = {
+    'quad1': 'purple',   
+    'quad2': 'purple',  
+    'quad3': 'purple' 
+}
+
+cores_pbs = {
+    'quad1': 'red', 
+    'quad2': 'orange', 
+    'quad3': 'green'    
+}
 
 plt.figure(figsize=(10, 10))
 
 # Processar cada quadrante e prever PBs
-for quad in quad_ranges.keys():
-    # Distribuir K dispositivos aleatoriamente
+for i, quad in enumerate(quad_ranges.keys()):
+    # Distribuir K dispositivos aleatoriamente no quadrante
     x_coords, y_coords = distribui_disp(K, quad)
-    pb_x, pb_y = prediz_PB(x_coords, y_coords, model, quad, esc)
-    plt.scatter(x_coords, y_coords, label=f'Dispositivos - {quad}', alpha=0.6)
     
-    # Prever e ajustar posição do PB para este conjunto de dispositivos
-    plt.scatter(pb_x, pb_y, c='red', label=f'PB - {quad}', marker='X', s=100)
+    # Formar a entrada e normalizá-la
+    X = np.column_stack((x_coords, y_coords)).reshape(1, 10, 2)
+    X_expanded = np.tile(X, (1, 1, 10))  # Ajuste de dimensão para (1, 10, 20)
+    X_expanded_normalizado = scaler_X.transform(X_expanded.reshape(-1, X_expanded.shape[-1])).reshape(X_expanded.shape)
+    
+    # Passar a entrada normalizada ao modelo
+    previsao_normalizada = model.predict(X_expanded_normalizado)
+    
+    # Desnormalizar a previsão do PB
+    previsao_desnormalizada = scaler_y.inverse_transform(previsao_normalizada)
+    pb_x_desnorm, pb_y_desnorm = previsao_desnormalizada[0, 0], previsao_desnormalizada[0, 1]
+    
+    # Desnormalizar X_expanded para plotagem
+    X_expanded_desnormalizado = scaler_X.inverse_transform(X_expanded_normalizado.reshape(-1, X_expanded.shape[-1])).reshape(X_expanded.shape)
+    
+    # Plotar os dispositivos desnormalizados 
+    if i == 0:
+        plt.scatter(X_expanded_desnormalizado[0, :, 0], X_expanded_desnormalizado[0, :, 1], color=cores_dispositivos[quad], label='Dispositivos', alpha=0.6)
+    else:
+        plt.scatter(X_expanded_desnormalizado[0, :, 0], X_expanded_desnormalizado[0, :, 1], color=cores_dispositivos[quad], alpha=0.6)
+
+    # Plotar a previsão do PB desnormalizada
+    plt.scatter(pb_x_desnorm, pb_y_desnorm, color=cores_pbs[quad], label=f'PB previsto {quad[-1]}', marker='X', s=100)
 
 plt.xlabel('Posição X')
 plt.ylabel('Posição Y')
-plt.title('Distribuição Uniforme de Dispositivos e Predição de PBs por Quadrante')
+plt.title('Distribuição de Dispositivos e Predição de PBs Desnormalizados')
 plt.legend()
 plt.show()
