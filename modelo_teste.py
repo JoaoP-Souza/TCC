@@ -117,36 +117,79 @@ test_loss = model.evaluate(X_test, y_test)
 print(f'\nPerda no teste: {test_loss}')
 
 # Plotar a perda de treino e validação para o último fold
+plt.figure(figsize=(10, 6))  # Aumentar o tamanho da figura
 plt.plot(history.history['loss'], label='Perda no treinamento')
 plt.plot(history.history['val_loss'], label='Perda na validação')
-plt.xlabel('Épocas')
-plt.ylabel('Perda')
-plt.title('Perda no Treinamento e na Validação para o último fold')
-plt.legend()
+
+# Ajuste dos tamanhos das fontes
+plt.xlabel('Épocas', fontsize=16)
+plt.ylabel('Perda', fontsize=16)
+plt.legend(fontsize=12)
+plt.xticks(fontsize=12)
+plt.yticks(fontsize=12)
 plt.show()
 
 y_pred = model.predict(X_test)# mandar x teste e y_pred e salvar pra cada valor de K (desnormalizados)
-
+#PLOTAGEM DE DISPOSITIVOS E PREVISOES
+# Desnormalizar as previsões e o conjunto de teste para todos os dispositivos
 pred_desnormalizado = scaler_y.inverse_transform(y_pred)
-X_test_new = X_test[:,1,:]
-X_test_desnormalizado = scaler_X.inverse_transform(X_test_new)
-X_test_x = X_test_desnormalizado[:, 0:10]
- 
-X_test_y = X_test_desnormalizado[:, 10:20]
+X_test_desnormalizado = scaler_X.inverse_transform(X_test.reshape(-1, X_test.shape[2])).reshape(X_test.shape)
 
-plt.figure()
-plt.scatter(X_test_x[0,:], X_test_y[0,:])
-plt.scatter(X_test_x[1,:], X_test_y[1,:], marker = 'o')#dispositivos
-plt.scatter(pred_desnormalizado[0,0], pred_desnormalizado[0,1], marker = 'x')
-plt.scatter(pred_desnormalizado[1,0], pred_desnormalizado[1,1], marker = 'x')#PB
-print(X_test_desnormalizado)
+# Separar as coordenadas x e y dos dispositivos
+X_test_x = X_test_desnormalizado[:, :, 0:10]
+X_test_y = X_test_desnormalizado[:, :, 10:20]
 
-# print(np.size(desn,axis=0))
-# print(np.size(desn,axis=1))
+plt.figure(figsize=(10, 8))
 
-error_percent = np.mean(np.abs((y_pred - y_test) / y_test)) * 100 
-print(f"Erro percentual médio: {error_percent:.2f}%") #printa o erro percentual no terminal
+# Loop para plotar apenas as duas primeiras amostras com 10 dispositivos cada
+for i in range(2):  # Limita a iteração às duas primeiras amostras
+    # Plotar os 10 dispositivos para a amostra i
+    plt.scatter(X_test_x[i, 0, :], X_test_y[i, 0, :], marker='o', label=f'Dispositivos Amostra {i+1}')
+    
+    # Verificar se realmente estamos plotando 10 dispositivos
+    print(f"Coordenadas dos 10 dispositivos para a amostra {i+1} (X):", X_test_x[i, 0, :])
+    print(f"Coordenadas dos 10 dispositivos para a amostra {i+1} (Y):", X_test_y[i, 0, :])
+    
+    # Plotar o PB previsto para a amostra i
+    plt.scatter(pred_desnormalizado[i, 0], pred_desnormalizado[i, 1], marker='x', color='red', label=f'PB Previsto Amostra {i+1}')
 
+plt.xlabel("Coordenada X", fontsize=14)
+plt.ylabel("Coordenada Y", fontsize=14)
+plt.title("Distribuição de Dispositivos e PBs Previstos (Amostras 1 e 2)", fontsize=16)
+plt.legend(fontsize=12)
+plt.show()
+
+#PREDICOES E GERACAO DE ARQUIVOS TXT
+y_pred = model.predict(X_test)# mandar x teste e y_pred e salvar pra cada valor de K (desnormalizados)
+
+# Desnormalizar os valores de X_test e y_pred
+X_test_desnormalizado = scaler_X.inverse_transform(X_test.reshape(-1, X_test.shape[2])).reshape(X_test.shape)
+pred_desnormalizado = scaler_y.inverse_transform(y_pred)
+
+# Salvar X_test_desnormalizado em um arquivo txt (para cada valor de K)
+with open("X_test_desnormalizado_K10.txt", "w") as file_X:
+    for i in range(len(X_test_desnormalizado)):
+        for j in range(X_test_desnormalizado.shape[1]):  # para cada timestep K
+            # Escrever as coordenadas X e Y separadas por espaço
+            linha = " ".join(map(str, X_test_desnormalizado[i, j])) + "\n"
+            file_X.write(linha)
+
+# Salvar pred_desnormalizado em um arquivo txt
+with open("pred_desnormalizado_K10.txt", "w") as file_y:
+    for i in range(len(pred_desnormalizado)):
+        # Escrever as coordenadas desnormalizadas do PB separadas por espaço
+        linha = " ".join(map(str, pred_desnormalizado[i])) + "\n"
+        file_y.write(linha)
+
+# Desnormalizar as previsões e o conjunto de teste para todos os dispositivos
+pred_desnormalizado = scaler_y.inverse_transform(y_pred)
+X_test_desnormalizado = scaler_X.inverse_transform(X_test.reshape(-1, X_test.shape[2])).reshape(X_test.shape)
+
+# Extrair as coordenadas x e y dos dispositivos, assumindo que as primeiras 10 colunas são X e as últimas 10 são Y
+X_test_x = X_test_desnormalizado[:, :, :10]  # Primeiras 10 colunas como coordenadas X
+X_test_y = X_test_desnormalizado[:, :, 10:20]  # Próximas 10 colunas como coordenadas Y
+
+#PLOTAGEM POR QUADRANTES
 # Parâmetros dos quadrantes
 esc = 100
 quad_ranges = {
@@ -162,9 +205,6 @@ def distribui_disp(K, quad):
     x_coords = np.random.uniform(x_min, x_max, K)
     y_coords = np.random.uniform(y_min, y_max, K)
     return x_coords, y_coords
-
-# def desnormaliza_quad(quad, x_min, x_max, y_min, y_max)
-    
 
 # Função para prever e ajustar a posição dos PBs em cada quadrante usando o modelo treinado
 def prediz_PB(x_coords, y_coords, modelo, quad, esc):
